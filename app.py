@@ -8,11 +8,10 @@ import gc
 def main():
     st.title("YouTube & Facebook Audio Downloader & Transcriber")
 
-    # 1) User Inputs
+    # ----------- USER INPUTS -----------
     url = st.text_input("Video URL (YouTube or Facebook)")
 
-    # Let the user optionally upload a cookie file
-    # (needed for private videos, region-locked, or age-restricted content)
+    # Optional: upload a cookies.txt for age-locked/private videos
     cookie_file = st.file_uploader("Cookies File (optional)", type=['txt'])
 
     output_dir = "downloads"
@@ -25,13 +24,13 @@ def main():
     do_transcribe = st.checkbox("Transcribe Audio", value=True)
     include_timestamps = st.checkbox("Include Timestamps", value=False)
 
-    # Button to trigger download & transcription
+    # ----------- RUN WHEN BUTTON CLICKED -----------
     if st.button("Download & Process"):
         if not url.strip():
             st.error("Please enter a valid video URL.")
             return
 
-        # 2) Prepare yt-dlp Options
+        # 1) Set up yt-dlp options
         ydl_opts = {
             'format': 'bestaudio/best',
             'postprocessors': [{
@@ -42,16 +41,15 @@ def main():
             'outtmpl': os.path.join(output_dir, '%(title)s.%(ext)s'),
         }
 
-        # If a cookie file was uploaded, write it to a temporary path and use it
+        # If user provided a cookies file, save it and pass to yt-dlp
         cookie_path = None
         if cookie_file is not None:
             cookie_path = os.path.join(output_dir, "cookies_temp.txt")
             with open(cookie_path, 'w', encoding='utf-8') as f:
                 f.write(cookie_file.read().decode('utf-8'))
-            # Add to ydl_opts
             ydl_opts['cookiefile'] = cookie_path
 
-        # 3) Download Audio
+        # 2) Download the audio
         status_placeholder = st.empty()
         progress_bar = st.progress(0)
 
@@ -79,16 +77,16 @@ def main():
                 ydl.download([url])
         except Exception as e:
             st.error(f"Error while downloading: {e}")
-            # Clean up cookie file if we created one
+            # Clean up any cookies file
             if cookie_path and os.path.exists(cookie_path):
                 os.remove(cookie_path)
             return
 
-        # 4) Transcribe (if enabled)
+        # 3) Transcription (if selected)
         transcript_text = ""
         if do_transcribe:
             try:
-                status_placeholder.info("Setting up Whisper model...")
+                status_placeholder.info("Loading Whisper model...")
                 if torch.cuda.is_available():
                     device = "cuda"
                 else:
@@ -97,13 +95,15 @@ def main():
                 model = whisper.load_model(model_choice).to(device)
                 model.eval()
 
-                status_placeholder.info("Transcribing audio (Whisper)...")
+                status_placeholder.info("Transcribing audio...")
                 result = model.transcribe(mp3_file)
 
+                # Clean GPU memory if used
                 if device == "cuda":
                     torch.cuda.empty_cache()
                     gc.collect()
 
+                # Format the transcript
                 def format_timestamp(sec):
                     mm = int(sec // 60)
                     ss = int(sec % 60)
@@ -113,6 +113,7 @@ def main():
                 for seg in result["segments"]:
                     segment_start = seg["start"]
                     segment_text = seg["text"].strip()
+
                     if include_timestamps:
                         stamp = format_timestamp(segment_start)
                         lines.append(f"{stamp} {segment_text}")
@@ -123,17 +124,17 @@ def main():
 
             except Exception as e:
                 st.error(f"Error while transcribing: {e}")
-                # Cleanup
                 if cookie_path and os.path.exists(cookie_path):
                     os.remove(cookie_path)
                 return
 
-        # 5) Cleanup & Output
+        # 4) Optional Cleanup
         if not save_audio and os.path.exists(mp3_file):
             os.remove(mp3_file)
 
         status_placeholder.success("Processing complete!")
 
+        # Show transcript if available
         if transcript_text:
             st.subheader("Transcription:")
             st.text_area("Transcribed Text", transcript_text, height=300)
@@ -144,7 +145,7 @@ def main():
                 mime="text/plain"
             )
 
-        # Remove temp cookie file if it exists
+        # Remove temp cookie file if created
         if cookie_path and os.path.exists(cookie_path):
             os.remove(cookie_path)
 
