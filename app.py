@@ -30,7 +30,7 @@ def main():
             with st.spinner("Configuring downloader..."):
                 ydl_opts = {
                     'format': 'bestaudio/best',
-                    "cookiefile": path_to_cookiefile,
+                    "cookiefile": cookie_path,
                     'postprocessors': [{
                         'key': 'FFmpegExtractAudio',
                         'preferredcodec': 'mp3',
