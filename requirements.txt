@@ -1,4 +1,4 @@
 yt-dlp
 streamlit
-openai-whisper
-torch
+torch==1.13.1
+openai-whisper==20230314
